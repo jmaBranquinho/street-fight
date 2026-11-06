@@ -98,6 +98,15 @@ kbd{font-family:var(--display);font-size:13px;background:var(--ink);color:#fff;b
 .btn:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
 button:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 .small-note{font-family:var(--body);font-size:12px;opacity:.65;margin-top:8px}
+.btn.alt{font-size:20px;padding:6px 18px;margin:8px 0 0 8px;background:#2b2d35}
+/* screensaver: no HUD, no words, no score pop-ups, just the brawl */
+body.ss #hud,body.ss #hint,body.ss #labels,body.ss #banner,body.ss .pop.small,body.ss .pop.gold,body.ss .pop.prop{display:none!important}
+body.ss canvas#game{cursor:none}
+#ssexit{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:6;
+  font:20px/1 var(--display);letter-spacing:1px;color:#fff;background:rgba(0,0,0,.6);border:2px solid #000;border-radius:4px;padding:8px 12px;cursor:pointer;
+  opacity:0;transition:opacity .4s;pointer-events:none}
+body.ss.awake #ssexit{opacity:1;pointer-events:auto}
+body.ss.awake canvas#game{cursor:default}
 .final{font-size:clamp(48px,12vw,72px);line-height:1;margin:6px 0;font-variant-numeric:tabular-nums}
 .newbest{display:inline-block;color:var(--red);font-size:26px;animation:pulse .4s infinite alternate}
 .grid{display:grid;grid-template-columns:1fr auto;gap:6px 14px;margin:12px 0;font-family:var(--body);font-size:15px;text-align:left}
@@ -124,6 +133,7 @@ button:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
 </div>
 <div id="hint" hidden>Type the yellow word to punch · Tab switch target · ⌫ restart word · Esc pause</div>
 <div id="banner"></div>
+<button id="ssexit" type="button">✕ STOP THE CHAOS</button>
 
 <div id="menu" class="overlay">
   <div class="card">
@@ -150,7 +160,7 @@ button:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
       </div>
     </div>
     <div class="tag" id="menuBest"></div>
-    <button id="go" class="btn" type="button">SLÅSS!</button>
+    <button id="go" class="btn" type="button">SLÅSS!</button><button id="ssgo" class="btn alt" type="button">🍿 SIT BACK AND ENJOY THE CHAOS</button>
     <div class="small-note">or press Enter</div>
   </div>
 </div>
@@ -171,6 +181,7 @@ button:focus-visible{outline:3px solid var(--navy);outline-offset:2px}
       <div>Longest combo</div><b id="s-combo">0</b>
       <div>Metres walked</div><b id="s-dist">0 m</b>
       <div>Street stuff wrecked</div><b id="s-wreck">0</b>
+      <div>Passers-by bowled over</div><b id="s-ped">0</b>
       <div>Accuracy</div><b id="s-acc">0%</b>
       <div>Words per minute</div><b id="s-wpm">0</b>
       <div>Best score</div><b id="s-best">0</b>
@@ -702,7 +713,7 @@ function updateProps(dt) {
     }
     if (Math.abs(p.x) > 6.2) { p.x = Math.sign(p.x) * 6.2; o.vel.x *= -0.5; } // bounce off the house fronts
     // chain reactions: flying junk smashes what it hits, and that smashes more, up to five links down
-    if (o.depth < 5 && o.chain < 3 && o.vel.lengthSq() > 30) knockInto(o, p, r, o.vel);
+    if (o.depth < 5 && o.chain < 3 && o.vel.lengthSq() > 30) knockInto(o, p, r, o.vel) || knockPeds(o, p, r, o.vel);
   }
 }
 function knockInto(src, p, r, vel) {
@@ -735,6 +746,10 @@ function barge(e) {
     if (o.state !== 'static') continue;
     const p = o.g.position;
     if (Math.abs(p.x - e.x) < o.hx + 0.3 && Math.abs(p.z - e.z) < o.hz + 0.3) smashProp(o, e.x, SHOVE);
+  }
+  for (const q of peds) {
+    if (q.state !== 'stroll' && q.state !== 'up') continue;
+    if (Math.abs(q.x - e.x) < 0.6 && Math.abs(q.z - e.z) < 0.6) knockPed(q, e.x, SHOVE, false);
   }
 }
 
@@ -853,8 +868,8 @@ function buildPerson(o = {}) {
   bx(head, 0.32, 0.22, 0.06, hair, 0, 0.05, -0.14);
   bx(head, 0.05, 0.05, 0.02, 0x111111, -0.07, 0.03, 0.155);
   bx(head, 0.05, 0.05, 0.02, 0x111111, 0.07, 0.03, 0.155);
-  bx(head, 0.11, 0.035, 0.02, 0x111111, -0.07, 0.09, 0.157).rotation.z = -0.5;
-  bx(head, 0.11, 0.035, 0.02, 0x111111, 0.07, 0.09, 0.157).rotation.z = 0.5;
+  const browL = bx(head, 0.11, 0.035, 0.02, 0x111111, -0.07, 0.09, 0.157); browL.rotation.z = -0.5;
+  const browR = bx(head, 0.11, 0.035, 0.02, 0x111111, 0.07, 0.09, 0.157); browR.rotation.z = 0.5;
   const mouth = bx(head, 0.14, 0.07, 0.02, 0x5a0000, 0, -0.08, 0.157);
   // damage that shows up as the word gets typed
   const blackEye = bx(head, 0.09, 0.09, 0.012, 0x4b2a6a, -0.07, 0.03, 0.151, false); blackEye.visible = false;
@@ -876,7 +891,7 @@ function buildPerson(o = {}) {
   };
   const [legL, kneeL] = leg(-1), [legR, kneeR] = leg(1);
   const hat = new THREE.Group(); hat.position.y = 0.12; head.add(hat);
-  const parts = { legL, kneeL, legR, kneeR, armL: arm(-1), armR: arm(1), head, mouth, blackEye, cheek, plaster };
+  const parts = { legL, kneeL, legR, kneeR, armL: arm(-1), armR: arm(1), head, mouth, browL, browR, blackEye, cheek, plaster };
   return { g, parts, hat };
 }
 
@@ -1217,7 +1232,7 @@ function startWave() {
 function newGame() {
   ensureAudio();
   clearWorld();
-  state = 'play'; wave = 1; hp = 100; score = 0; combo = 0; maxCombo = 0; kos = 0; hits = 0; misses = 0; playTime = 0; wrecked = 0;
+  state = 'play'; wave = 1; hp = 100; score = 0; combo = 0; maxCombo = 0; kos = 0; hits = 0; misses = 0; playTime = 0; wrecked = 0; bowled = 0; ssUsed = screensaver;
   target = null; waveBreak = 0; shake = 0; dmgFlash = 0; walked = 0; walking = false;
   for (const a of fpArms) a.punch = 0;
   camX = 0;
@@ -1226,7 +1241,7 @@ function newGame() {
 }
 function gameOver() {
   state = 'over'; target = null;
-  const isBest = score > best;
+  const isBest = score > best && !ssUsed;
   if (isBest) { best = score; store.set('gateslag-best', best); }
   $('overwave').textContent = `Flat on the cobbles on wave ${wave}.`;
   $('s-score').textContent = score.toLocaleString('nb-NO');
@@ -1234,12 +1249,36 @@ function gameOver() {
   $('s-combo').textContent = maxCombo;
   $('s-dist').textContent = Math.round(walked) + ' m';
   $('s-wreck').textContent = wrecked;
+  $('s-ped').textContent = bowled;
   $('s-acc').textContent = (hits + misses ? Math.round(100 * hits / (hits + misses)) : 0) + '%';
   $('s-wpm').textContent = playTime > 3 ? Math.round(hits / 5 / (playTime / 60)) : 0;
   $('s-best').textContent = best.toLocaleString('nb-NO');
   $('newbest').hidden = !isBest;
   $('hint').hidden = true;
   setTimeout(() => { if (state === 'over') { $('over').hidden = false; $('again').focus(); } }, 1100);
+}
+// screensaver: you walk and punch on your own, nothing on screen to type, and nobody can knock you out
+let screensaver = false, ssUsed = false, autoT = 0, wakeT = 0;
+function setScreensaver(on) {
+  if (on === screensaver) return;
+  if (on && (state === 'menu' || state === 'over')) newGame();
+  if (on && state === 'pause') setPause(false);
+  screensaver = on;
+  if (on) ssUsed = true;
+  document.body.classList.toggle('ss', on);
+  autoT = 0.6;
+  if (on) wake(); else { document.body.classList.remove('awake'); toMenu(); }
+}
+function wake() { wakeT = 2.5; document.body.classList.add('awake'); }
+// the autopilot types the nearest local's word once they're close, at a steady, human-ish pace
+function autoType(dt) {
+  autoT -= dt;
+  if (autoT > 0) return;
+  autoTarget();
+  const t = target;
+  if (!t || camZ - t.z > 5.5) { autoT = 0.1; return; }
+  landHit(t);
+  autoT = t === target ? rand(0.1, 0.19) : rand(0.35, 0.7); // a breather after each word
 }
 function setPause(p) {
   if (p && state === 'play') { state = 'pause'; $('pause').hidden = false; $('resume').focus(); }
@@ -1324,6 +1363,7 @@ function miss(e) {
 function release() { if (target) target.typed = 0; }
 function hurt(e) {
   if (state !== 'play') return;
+  if (screensaver) { shake = Math.min(1, shake + 0.5); sfxHurt(); return; }
   hp -= e.T.dmg; combo = 0;
   shake = 1; dmgFlash = 1;
   popup(new V3(camX + rand(-0.3, 0.3), 1.25, camZ - 1.2), pick(['AU!', 'AUA!', 'UFF!']), 'hurt', 0.7);
@@ -1334,6 +1374,7 @@ function hurt(e) {
 function focusKb() { try { $('kb').focus({ preventScroll: true }); } catch (err) { /* ignore */ } }
 addEventListener('keydown', (ev) => {
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+  if (screensaver) { ev.preventDefault(); if (ev.key === 'Escape') setScreensaver(false); else wake(); return; }
   if (ev.key === 'Escape') { ev.preventDefault(); if (state === 'play') setPause(true); else if (state === 'pause') setPause(false); return; }
   if (ev.key === 'Enter') {
     if (state === 'menu' || (state === 'over' && !$('over').hidden)) { ev.preventDefault(); newGame(); }
@@ -1343,7 +1384,11 @@ addEventListener('keydown', (ev) => {
   if (ev.key === 'Tab') { if (state === 'play') { ev.preventDefault(); cycleTarget(); } return; }
   if (ev.key.length === 1 && state === 'play') { ev.preventDefault(); onChar(ev.key); }
 });
-$('kb').addEventListener('input', () => { const kb = $('kb'), v = kb.value; kb.value = ''; for (const ch of v) onChar(ch); });
+$('kb').addEventListener('input', () => { const kb = $('kb'), v = kb.value; kb.value = ''; if (!screensaver) for (const ch of v) onChar(ch); });
+$('ssgo').onclick = () => setScreensaver(true);
+$('ssexit').onclick = () => setScreensaver(false);
+addEventListener('pointermove', () => { if (screensaver) wake(); });
+addEventListener('pointerdown', () => { if (screensaver) wake(); });
 canvas.addEventListener('pointerdown', () => { if (state === 'play') focusKb(); });
 $('go').onclick = newGame; $('again').onclick = newGame;
 $('resume').onclick = () => setPause(false);
@@ -1360,7 +1405,7 @@ function setLang(l) { lang = l; store.set('gateslag-lang', l); $('lang-en').setA
 $('lang-en').onclick = () => setLang('en'); $('lang-no').onclick = () => setLang('no');
 setLang(lang);
 $('menuBest').textContent = best ? 'REKORD ' + best.toLocaleString('nb-NO') : '';
-document.addEventListener('visibilitychange', () => { if (document.hidden) setPause(true); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && !screensaver) setPause(true); });
 
 // ---------------------------------------------------------------- audio
 let AC = null, master = null, noiseB = null;
@@ -1407,6 +1452,8 @@ function updateGame(dt) {
   walking = !enemies.some((e) => alive(e) && camZ - e.z < (e.T.boss ? 2.9 : 2.0) + 0.6);
   if (walking) { const v = walkSpeed(); camZ -= v * dt; walked += v * dt; }
   if (walking) walkSmash();
+  shovePeds();
+  if (screensaver) autoType(dt);
   autoTarget();
   const spd = Math.min(3, 1.0 + wave * 0.15);
   const interval = Math.max(1.1, 2.6 - wave * 0.15);
@@ -1450,7 +1497,7 @@ function animEnemy(e, dt) {
     }
     r.position.x = clamp(r.position.x, -5.6, 5.6);
     e.chain = e.chain || 0;
-    if (e.chain < 3 && e.vel.lengthSq() > 20) knockInto(e, r.position, 0.5 * S, e.vel);
+    if (e.chain < 3 && e.vel.lengthSq() > 20) knockInto(e, r.position, 0.5 * S, e.vel) || knockPeds(e, r.position, 0.5 * S, e.vel);
     return;
   }
   if (e.state === 'down') {
@@ -1494,6 +1541,182 @@ function animEnemy(e, dt) {
   if (e.cord) e.cord.rotation.z = Math.sin(e.t * 4) * 0.25;
   const d = dmgFrac(e);
   P.cheek.visible = d > 0.2; P.blackEye.visible = d > 0.45; P.plaster.visible = d > 0.7;
+}
+
+// passers-by: they don't fight, they just get in the way and go flying
+const peds = [];
+let bowled = 0;
+const PED_MAX = 22;
+const COATS = [0x2f4f7f, 0x8c2f39, 0x3d5a40, 0x6b4a2b, 0x1c1d22, 0xc9922e, 0x7a7f8a, 0x4b3a6b, 0xb55a3a, 0x2a6f75];
+const LUER = [0xd42a2f, 0xf2c230, 0x1f2f5e, 0xece4d4, 0x2e8b57, 0xe76fa4];
+const YELLS_PED = ['Hei!', 'Unnskyld?!', 'Oi!', 'Pass deg!', 'Uff!', 'Neimen!', 'Hallo?!', 'Kjeltring!', 'Huff da!', 'Nei!'];
+function sfxOof() { tone('square', 230 * rand(0.85, 1.2), 90, 0.16, 0.12); noise(700, 0.8, 'lowpass', 0.12, 0.35); }
+function setFace(P, mood) {
+  if (P.face === mood) return;
+  P.face = mood;
+  const calm = mood === 'calm';
+  P.browL.rotation.z = calm ? -0.05 : 0.45; P.browR.rotation.z = calm ? 0.05 : -0.45;
+  P.browL.position.y = P.browR.position.y = calm ? 0.1 : 0.115;
+  for (const b of [P.browL, P.browR]) b.updateMatrix();
+  P.mouth.scale.set(calm ? 0.1 : 0.09, calm ? 0.03 : 0.1, 0.02);
+  P.mouth.position.y = calm ? -0.08 : -0.085;
+  P.mouth.updateMatrix();
+}
+function makePed(z) {
+  const kid = chance(0.15), old = !kid && chance(0.2);
+  const S = kid ? rand(0.62, 0.72) : rand(0.92, 1.04);
+  const coat = pick(COATS);
+  const b = buildPerson({ shirt: coat, pants: chance(0.5) ? 0x2b2d35 : pick([0x3a4256, 0x4a3a2c, 0x23262e]), hair: old ? pick([0x8b8b8b, 0xd8d8d8]) : undefined });
+  if (chance(0.65)) { // a lue with a bobble
+    const c = pick(LUER);
+    bx(b.hat, 0.34, 0.12, 0.34, c, 0, 0.07); // sits above the brows so the face still reads
+    sp(b.hat, 0.07, chance(0.5) ? 0xffffff : c, 0, 0.16, 0);
+  }
+  if (chance(0.5)) bx(b.g, 0.4, 0.09, 0.34, pick(LUER), 0, 0.64); // scarf
+  const root = new THREE.Group(); root.add(b.g); root.scale.setScalar(S);
+  // where they're going: along the pavement, ambling down the road, or crossing it
+  const r = Math.random();
+  let x, vx = 0, vz = 0;
+  if (r < 0.4) { x = (chance(0.5) ? -1 : 1) * rand(4.3, 5.6); vz = chance(0.5) ? 1 : -1; }
+  else if (r < 0.75) { x = rand(-3, 3); vz = chance(0.6) ? -1 : 1; vx = rand(-0.15, 0.15); }
+  else { x = rand(-5, 5); vx = chance(0.5) ? 1 : -1; vz = rand(-0.25, 0.25); }
+  const mood = chance(0.4) ? 'panic' : 'calm';
+  let speed = (old ? rand(0.5, 0.8) : kid ? rand(1.2, 1.8) : rand(0.8, 1.3));
+  if (mood === 'panic') speed *= 1.7; // the panicky ones scurry
+  root.position.set(x, HIP * S, z);
+  scene.add(root);
+  setFace(b.parts, mood);
+  const q = { root, P: b.parts, S, mood, x, z, vx, vz, speed, state: 'stroll', t: rand(0, 10), seed: rand(0, 10), vel: new V3(), ang: new V3(), downT: 0, upT: 0, chain: 0, depth: 0, kicks: 0 };
+  peds.push(q);
+  return q;
+}
+function blockedByProp(x, z) {
+  for (const o of props) {
+    if (o.state !== 'static') continue;
+    const p = o.g.position;
+    if (Math.abs(p.x - x) < o.hx + 0.25 && Math.abs(p.z - z) < o.hz + 0.25) return true;
+  }
+  return false;
+}
+function ensurePeds() {
+  for (let i = peds.length - 1; i >= 0; i--) {
+    const q = peds[i];
+    if (q.root.position.z > camZ + 12 || q.root.position.z < camZ - 110) { scene.remove(q.root); peds.splice(i, 1); }
+  }
+  let tries = 6;
+  while (peds.length < PED_MAX && tries-- > 0) {
+    const z = camZ - (peds.length < PED_MAX / 2 && time < 1 ? rand(7, 85) : rand(50, 90));
+    const q = makePed(z);
+    if (blockedByProp(q.x, q.z)) { scene.remove(q.root); peds.pop(); }
+  }
+}
+function knockPed(q, srcX, inherit, byPlayer) {
+  if (q.state === 'fly') return;
+  const p = q.root.position, down = q.state === 'down';
+  q.kicks++;
+  if (state === 'play') {
+    if (down) { score += 10; popup(p.clone().add(new V3(0, 0.5, 0)), '+10', 'small', 0.6); }
+    else {
+      const pts = 25 * mult();
+      score += pts; bowled++;
+      if (chance(0.45)) popup(p.clone().add(new V3(0, 1.3 * q.S, 0)), pick(YELLS_PED), 'yell', 1.0);
+      else popup(p.clone().add(new V3(0, 1.1 * q.S, 0)), '+' + pts, 'small', 0.7);
+      shake = Math.min(1, shake + 0.15);
+      sfxOof();
+    }
+  }
+  const side = Math.sign(p.x - srcX) || (chance(0.5) ? 1 : -1), pow = down ? 0.55 : 1;
+  if (inherit) q.vel.set(inherit.x * 0.6 + side * rand(1, 3), Math.max(3, Math.abs(inherit.y) * 0.4) + rand(2, 4), inherit.z * 0.6 - rand(0, 2));
+  else q.vel.set(side * rand(1.5, 3.5) * pow, rand(4.5, 7) * pow, (byPlayer ? -(walkSpeed() + rand(4, 7)) : rand(-3, 3)) * pow);
+  if (q.S < 0.8) q.vel.multiplyScalar(1.25); // kids fly further
+  q.ang.set(rand(-6, 6), rand(-6, 6), rand(-6, 6));
+  q.state = 'fly'; q.chain = 0;
+  setFace(q.P, 'panic');
+  emit('snow', p, 6, 3);
+}
+// something flying (a prop, a local or another passer-by) bowls over whoever it hits
+function knockPeds(src, p, r, vel) {
+  for (const q of peds) {
+    if (q === src || q.state === 'fly') continue;
+    const qp = q.root.position;
+    if (Math.abs(qp.x - p.x) > 0.3 + r || Math.abs(qp.z - p.z) > 0.3 + r || p.y - r > 1.8 * q.S) continue;
+    if (q.state === 'down' && vel.lengthSq() < 60) continue;
+    q.depth = (src.depth || 0) + 1;
+    src.chain = (src.chain || 0) + 1;
+    knockPed(q, p.x, vel, false);
+    vel.multiplyScalar(0.7);
+    return true;
+  }
+  return false;
+}
+// you shoulder your way through: anyone in your path goes flying
+function shovePeds() {
+  for (const q of peds) {
+    if (q.state === 'fly' || (q.state === 'down' && (!walking || q.kicks > 2))) continue;
+    const p = q.root.position, ahead = camZ - p.z;
+    if (ahead < -0.3 || ahead > 0.9 || Math.abs(p.x - camX) > 0.3 + REACH) continue;
+    if (q.state !== 'down') throwPunch('jab', null, p.clone().add(new V3(0, 0.4 * q.S, 0)));
+    q.depth = 0;
+    knockPed(q, camX, null, true);
+  }
+}
+function updatePeds(dt) {
+  for (const q of peds) {
+    const P = q.P, r = q.root, S = q.S;
+    q.t += dt;
+    if (q.state === 'stroll') {
+      const nx = q.x + q.vx * q.speed * dt, nz = q.z + q.vz * q.speed * dt;
+      if (Math.abs(nx) > 5.7 || blockedByProp(nx, nz)) { q.vx = -q.vx; q.vz = -q.vz; }
+      else { q.x = nx; q.z = nz; }
+      poseReset(P);
+      const ph = q.t * 7 * q.speed;
+      poseWalk(P, ph, 0.45);
+      if (q.mood === 'panic') {
+        P.armL.rotation.set(-2.6 + Math.sin(ph) * 0.4, 0, -0.3);
+        P.armR.rotation.set(-2.6 - Math.sin(ph) * 0.4, 0, 0.3);
+        P.head.rotation.y = Math.sin(q.t * 5 + q.seed) * 0.5;
+      }
+      r.position.set(q.x, HIP * S + Math.abs(Math.cos(ph)) * 0.03 * S, q.z);
+      r.rotation.set(0, Math.atan2(q.vx, q.vz), 0);
+    } else if (q.state === 'fly') {
+      q.vel.y -= 22 * dt;
+      r.position.addScaledVector(q.vel, dt);
+      r.rotation.x += q.ang.x * dt; r.rotation.y += q.ang.y * dt; r.rotation.z += q.ang.z * dt;
+      poseFlail(P, time + q.seed);
+      const rr = 0.45 * S;
+      if (r.position.y < rr) {
+        r.position.y = rr;
+        if (q.vel.y < 0) { q.vel.y *= -0.35; q.vel.x *= 0.6; q.vel.z *= 0.6; q.ang.multiplyScalar(0.5); emit('snow', r.position, 6, 3); }
+        if (Math.abs(q.vel.y) < 1.6) {
+          q.state = 'down'; q.downT = 0; q.vel.set(0, 0, 0);
+          r.rotation.set(wrapA(r.rotation.x), wrapA(r.rotation.y), wrapA(r.rotation.z));
+          poseReset(P);
+        }
+      }
+      if (Math.abs(r.position.x) > 5.9) { r.position.x = Math.sign(r.position.x) * 5.9; q.vel.x *= -0.5; }
+      // and they take out whatever they land on
+      if (q.depth < 5 && q.chain < 3 && q.vel.lengthSq() > 20) knockInto(q, r.position, 0.45 * S, q.vel) || knockPeds(q, r.position, 0.45 * S, q.vel);
+    } else if (q.state === 'down') {
+      q.downT += dt;
+      const k = Math.min(1, dt * 6);
+      r.rotation.x = lerp(r.rotation.x, -PI / 2, k); r.rotation.z = lerp(r.rotation.z, 0, k);
+      r.position.y = lerp(r.position.y, 0.17 * S, k);
+      P.armL.rotation.z = lerp(P.armL.rotation.z, -1.3, k); P.armR.rotation.z = lerp(P.armR.rotation.z, 1.3, k);
+      if (q.downT > 2.2 + q.seed * 0.15) { q.state = 'up'; q.upT = 0; poseReset(P); }
+    } else if (q.state === 'up') {
+      // dust yourself off and walk off in a huff
+      q.upT += dt;
+      const k = Math.min(1, dt * 5);
+      r.rotation.x = lerp(r.rotation.x, 0, k); r.rotation.z = lerp(r.rotation.z, 0, k);
+      r.position.y = lerp(r.position.y, HIP * S, k);
+      if (q.upT > 0.7) {
+        q.x = clamp(r.position.x, -5.6, 5.6); q.z = r.position.z;
+        if (chance(0.5)) { q.vx = -q.vx; q.vz = -q.vz; }
+        q.state = 'stroll'; q.kicks = 0; q.depth = 0;
+        setFace(q.P, q.mood);
+      }
+    }
+  }
 }
 
 function updateHats(dt) {
@@ -1573,7 +1796,9 @@ function update(dt) {
   if (state !== 'pause') time += dt;
   if (state === 'play') updateGame(dt);
   ensureChunks();
+  ensurePeds();
   if (state !== 'pause') {
+    updatePeds(dt);
     for (const e of enemies) animEnemy(e, dt);
     if (enemies.some((e) => e.gone)) { enemies.filter((e) => e.gone).forEach(removeEnemy); enemies = enemies.filter((e) => !e.gone); }
     for (const a of fpArms) a.punch = Math.max(0, a.punch - dt);
@@ -1605,6 +1830,7 @@ function update(dt) {
   updateLabels();
   updatePops(state === 'pause' ? 0 : dt);
   if (state === 'play') updateHud();
+  if (screensaver && wakeT > 0) { wakeT -= dt; if (wakeT <= 0) document.body.classList.remove('awake'); }
 }
 
 function resize() {
@@ -1628,8 +1854,18 @@ function render() {
 }
 
 // menu scene: a few locals already squaring up
-function demo(key, x, z) { const e = makeEnemy(key, x, z); e.state = 'fight'; e.attackT = 99; e.word = 'hei'; }
-demo('russ', -1.4, -5.5); demo('boss', 0.4, -9); demo('fisker', 1.6, -6.5);
+function demo(key, x, z) { const e = makeEnemy(key, x, camZ + z); e.state = 'fight'; e.attackT = 99; e.word = 'hei'; }
+function demoScene() { demo('russ', -1.4, -5.5); demo('boss', 0.4, -9); demo('fisker', 1.6, -6.5); }
+demoScene();
+function toMenu() {
+  clearWorld();
+  state = 'menu'; target = null; queue = []; waveBreak = 0; walking = false; shake = 0; dmgFlash = 0;
+  for (const a of fpArms) a.punch = 0;
+  $('hud').hidden = true; $('hint').hidden = true; $('pause').hidden = true; $('over').hidden = true; $('menu').hidden = false;
+  $('menuBest').textContent = best ? 'REKORD ' + best.toLocaleString('nb-NO') : '';
+  demoScene();
+  $('go').focus();
+}
 
 let last = performance.now();
 function frame(now) {
@@ -1643,7 +1879,8 @@ requestAnimationFrame(frame);
 
 // handy for testing from the console
 window.__gateslag = {
-  get state() { return { state, wave, hp, score, kos, combo, wrecked, muted, camZ: +camZ.toFixed(1), camX: +camX.toFixed(2), walking, chunks: chunks.length, props: props.length, target: target && target.word, enemies: enemies.map((e) => `${e.key}:${e.word}:${e.state}:${e.z.toFixed(1)}`) }; },
+  get peds() { return peds; },
+  get state() { return { state, wave, hp, score, kos, combo, wrecked, bowled, muted, screensaver, peds: peds.length, pedStates: peds.reduce((m, q) => (m[q.state] = (m[q.state] || 0) + 1, m), {}), camZ: +camZ.toFixed(1), camX: +camX.toFixed(2), walking, chunks: chunks.length, props: props.length, target: target && target.word, enemies: enemies.map((e) => `${e.key}:${e.word}:${e.state}:${e.z.toFixed(1)}`) }; },
   newGame, step(n = 60) { for (let i = 0; i < n; i++) update(1 / 60); render(); },
   typeNext() { const t = target && alive(target) ? target : enemies.filter(alive).sort((a, b) => b.z - a.z)[0]; if (t) onChar(t.word[t.typed]); },
 };
